@@ -156,7 +156,7 @@ keycopy(void *src, size_t s)
 
 static void
 do_mapreduce(int nprocs, int nsplits, int reduce_tasks,
-	     void *fdata, size_t len, final_data_kvs_len_t * wr_vals)
+	     void *fdata, size_t len, final_data_kvs_len_t * wr_vals, int quiet)
 {
     mr_param_t mr_param;
     wr_data_t wr_data;
@@ -180,6 +180,7 @@ do_mapreduce(int nprocs, int nsplits, int reduce_tasks,
     mr_param.keycopy = keycopy;
     mr_param.app_arg.mapgroup.group_tasks = reduce_tasks;
     mr_param.part_func = NULL;
+    mr_param.quiet = quiet;
     assert(mr_run_scheduler(&mr_param) == 0);
 }
 
@@ -223,7 +224,9 @@ main(int argc, char *argv[])
 	switch (c) {
 	case 'p':
 	    nprocs = atoi(optarg);
-	    printf("# --cores=%d\n", nprocs);
+        if (!quiet) {
+            printf("# --cores=%d\n", nprocs);
+        }
 	    break;
 	case 'l':
 	    ndisp = atoi(optarg);
@@ -236,7 +239,9 @@ main(int argc, char *argv[])
 	    break;
 	case 's':
 	    inputsize = atol(optarg) * 1024 * 1024;
-	    printf("# --size=%s\n", pretty_size(inputsize, buf, sizeof buf));
+        if (!quiet) {
+	        printf("# --size=%s\n", pretty_size(inputsize, buf, sizeof buf));
+        }
 	    break;
 	case 'q':
 	    quiet = 1;
@@ -247,8 +252,10 @@ main(int argc, char *argv[])
 		void malloc_set_alloc_unit(size_t bytes);
 		malloc_set_alloc_unit(atoi(optarg));
 	    }
-	    printf("# --malloc=%s\n",
-		   pretty_size(atoi(optarg), buf, sizeof buf));
+        if (!quiet) {
+	        printf("# --malloc=%s\n",
+		       pretty_size(atoi(optarg), buf, sizeof buf));
+        }
 	    break;
 	default:
 	    wr_usage(argv[0]);
@@ -268,10 +275,10 @@ main(int argc, char *argv[])
 	fdata[pos++] = ' ';
     }
     memset(&fdata[pos], 0, inputsize - pos);
-    do_mapreduce(nprocs, map_tasks, reduce_tasks, fdata, inputsize, &wr_val);
-    mr_print_stats();
+    do_mapreduce(nprocs, map_tasks, reduce_tasks, fdata, inputsize, &wr_val, quiet);
+    mr_print_stats(quiet);
     if (!quiet)
-	print_top(&wr_val, ndisp);
+	    print_top(&wr_val, ndisp);
     mr_finalize();
     return 0;
 }

@@ -199,7 +199,7 @@ keycopy(void *src, size_t s)
 
 static void
 do_mapreduce(int nprocs, int map_tasks, int reduce_tasks,
-	     void *fdata, size_t len, final_data_kvs_len_t * wr_vals)
+	     void *fdata, size_t len, final_data_kvs_len_t * wr_vals, int quiet)
 {
     mr_param_t mr_param;
     wr_data_t wr_data;
@@ -227,6 +227,7 @@ do_mapreduce(int nprocs, int map_tasks, int reduce_tasks,
     // Use the default hash function to partition the keys among
     // different workers
     mr_param.part_func = NULL;
+    mr_param.quiet = quiet;
     assert(mr_run_scheduler(&mr_param) == 0);
 }
 
@@ -291,8 +292,8 @@ main(int argc, TCHAR * argv[])
 			 0)) != MAP_FAILED);
     final_data_kvs_len_t wc_vals;
     do_mapreduce(nprocs, map_tasks, reduce_tasks, fdata,
-		 finfo.st_size, &wc_vals);
-    mr_print_stats();
+		 finfo.st_size, &wc_vals, quiet);
+    mr_print_stats(quiet);
     if (!quiet) {
 	print_top(&wc_vals, ndisp);
     }

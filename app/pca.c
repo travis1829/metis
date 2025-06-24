@@ -473,10 +473,11 @@ main(int argc, char **argv)
     mr_param.key_cmp = mymeancmp;
     mr_param.split_func = pca_mean_splitter;
     mr_param.split_arg = &pca_data;
+    mr_param.quiet = quiet;
     nsplits = map_tasks;
 
     assert(mr_run_scheduler(&mr_param) == 0);
-    mr_print_stats();
+    mr_print_stats(quiet);
     pca_data.unit_size = sizeof(int) * num_cols * 2;	// size of two rows
     pca_data.next_start_row = pca_data.next_cov_row = 0;
     pca_data.mean = pca_mean_vals.data;	// array of keys and values - 
@@ -499,9 +500,10 @@ main(int argc, char **argv)
     mr_param.split_arg = &pca_data;
     mr_param.part_func = NULL;	// use default
     mr_param.key_cmp = mycovcmp;
+    mr_param.quiet = quiet;
     nsplits = map_tasks;
     assert(mr_run_scheduler(&mr_param) == 0);
-    mr_print_stats();
+    mr_print_stats(quiet);
     assert(pca_cov_vals.length ==
 	   ((((num_rows * num_rows) - num_rows) / 2) + num_rows));
     // Free the allocated structures

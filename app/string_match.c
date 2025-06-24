@@ -344,6 +344,7 @@ main(int argc, char *argv[])
     mr_params.key_cmp = mystrcmp;
     mr_params.part_func = NULL;	// use default
     mr_params.nr_cpus = nprocs;
+    mr_params.quiet = quiet;
     nsplits = map_tasks;
 
     mr_print(!quiet, "String Match: Calling String Match\n");
@@ -359,7 +360,7 @@ main(int argc, char *argv[])
     compute_hashes(key4, key4_final);
 
     assert(mr_run_scheduler(&mr_params) == 0);
-    mr_print_stats();
+    mr_print_stats(quiet);
     if (!quiet) {
 	printf("\nstring match: results:\n");
 	for (int i = 0; i < str_vals.length; i++) {

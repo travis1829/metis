@@ -241,7 +241,7 @@ output_all(final_data_kv_t * wc_vals)
 
 static void
 do_mapreduce(int nprocs, int map_tasks, int reduce_tasks,
-	     void *fdata, size_t len, final_data_kv_t * wc_vals)
+	     void *fdata, size_t len, final_data_kv_t * wc_vals, int quiet)
 {
     mr_param_t mr_param;
     wc_data_t wc_data;
@@ -276,6 +276,7 @@ do_mapreduce(int nprocs, int map_tasks, int reduce_tasks,
     mr_param.key_cmp = mystrcmp;
     mr_param.split_func = wordcount_splitter;
     mr_param.split_arg = &wc_data;
+    mr_param.quiet = quiet;
     assert(mr_run_scheduler(&mr_param) == 0);
 }
 
@@ -362,11 +363,11 @@ main(int argc, TCHAR * argv[])
     final_data_kv_t wc_vals;
 #ifndef __WIN__
     do_mapreduce(nprocs, map_tasks, reduce_tasks, fdata, finfo.st_size,
-		 &wc_vals);
+		 &wc_vals, quiet);
 #else
-    do_mapreduce(nprocs, map_tasks, reduce_tasks, fdata, gFileSize, &wc_vals);
+    do_mapreduce(nprocs, map_tasks, reduce_tasks, fdata, gFileSize, &wc_vals, quiet);
 #endif
-    mr_print_stats();
+    mr_print_stats(quiet);
     /* get the number of results to display */
     if (!quiet) {
 	print_top(&wc_vals, ndisp);

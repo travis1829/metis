@@ -321,13 +321,15 @@ mr_run_scheduler(mr_param_t * param)
     mr_run_task(MAP);
     map_time = read_tsc() - start_time;
     if (!mr_state.skip_reduce_phase) {
-	// reduce phase
-        printf("done with map\n");
-	start_time = read_tsc();
-	mr_run_task(REDUCE);
-	reduce_time = read_tsc() - start_time;
+	    // reduce phase
+        if (!param->quiet)
+            printf("done with map\n");
+        start_time = read_tsc();
+        mr_run_task(REDUCE);
+        reduce_time = read_tsc() - start_time;
     }
-    printf("done with map and reduce\n");
+    if (!param->quiet)
+        printf("done with map and reduce\n");
     // merge phase
     start_time = read_tsc();
     if (use_psrs) {
@@ -357,7 +359,7 @@ mr_run_scheduler(mr_param_t * param)
 }
 
 void
-mr_print_stats(void)
+mr_print_stats(int quiet)
 {
     prof_print(mr_state.mr_fixed.nr_cpus);
     uint64_t cpu_freq = get_cpu_freq();
@@ -366,36 +368,49 @@ mr_print_stats(void)
 	total_merge_time) * 1000 / cpu_freq;
     uint64_t real_time = total_real_time * 1000 / cpu_freq;
 #define SEP "\t"
-    printf("Runtime in millisecond [%d cores]\n\t",
-	   mr_state.mr_fixed.nr_cpus);
-    printf("Sample:\t%" PRIu64 SEP,
-	   total_sample_time * 1000 / cpu_freq);
-    printf("Map:\t%" PRIu64 SEP, total_map_time * 1000 / cpu_freq);
-    printf("Reduce:\t%" PRIu64 SEP,
-	   total_reduce_time * 1000 / cpu_freq);
-    printf("Merge:\t%" PRIu64 SEP, total_merge_time * 1000 / cpu_freq);
-    printf("Sum:\t%" PRIu64 SEP, sum_time);
-    printf("Real:\t%" PRIu64 SEP, real_time);
-    printf("\nReal in cycles: \t%lu\n", total_real_time);
-    printf("\nNumber of Tasks\n\t");
-    if (the_app.atype == atype_maponly) {
-	printf("Map:\t%" PRIu64 SEP, presplitter_nsplits(&mr_state.ps));
-    } else {
-	printf("Sample:\t%" PRIu64 SEP, mr_state.nsampled_splits);
-	printf("Map:\t%" PRIu64 SEP, presplitter_nsplits(&mr_state.ps) -
-	       mr_state.nsampled_splits);
-	printf("Reduce:\t%" PRIu32 SEP, the_app.mapgr.tasks);
+    if (!quiet) {
+        printf("Runtime in millisecond [%d cores]\n\t",
+           mr_state.mr_fixed.nr_cpus);
+        printf("Sample:\t%" PRIu64 SEP,
+           total_sample_time * 1000 / cpu_freq);
+        printf("Map:\t%" PRIu64 SEP, total_map_time * 1000 / cpu_freq);
+        printf("Reduce:\t%" PRIu64 SEP,
+           total_reduce_time * 1000 / cpu_freq);
+        printf("Merge:\t%" PRIu64 SEP, total_merge_time * 1000 / cpu_freq);
+        printf("Sum:\t%" PRIu64 SEP, sum_time);
+        printf("Real:\t%" PRIu64 SEP, real_time);
+        printf("\nReal in cycles: \t%lu\n", total_real_time);
+        printf("\nNumber of Tasks\n\t");
+        if (the_app.atype == atype_maponly) {
+        printf("Map:\t%" PRIu64 SEP, presplitter_nsplits(&mr_state.ps));
+        } else {
+        printf("Sample:\t%" PRIu64 SEP, mr_state.nsampled_splits);
+        printf("Map:\t%" PRIu64 SEP, presplitter_nsplits(&mr_state.ps) -
+               mr_state.nsampled_splits);
+        printf("Reduce:\t%" PRIu32 SEP, the_app.mapgr.tasks);
+        }
+        printf("\n");
     }
-    printf("\n");
 #ifdef XV6_USER
-    printf("PT pages: %" PRIu64 "\n", pt_pages());
+    if (!quiet) {
+        printf("PT pages: %" PRIu64 "\n", pt_pages());
+    }
+    else {
+        printf("cores: %d, total real cycles: %lu\n", mr_state.mr_fixed.nr_cpus, total_real_time);
+    }
 #else
     if (lockstat_enabled) {
         double wait_w = read_lockstat_w(), wait_r = read_lockstat_r();
-        printf("&mm->mmap_lock-W: %lf\n", wait_w);
-        printf("&mm->mmap_lock-R: %lf\n", wait_r);
-        printf("mmap_lock wait total: %lf\n", wait_w + wait_r);
-        printf("mmap_lock wait total / Real: %lf\n", (wait_w + wait_r) / ((double)real_time * 1000 * mr_state.mr_fixed.nr_cpus));
+        if (!quiet) {
+            printf("&mm->mmap_lock-W: %lf\n", wait_w);
+            printf("&mm->mmap_lock-R: %lf\n", wait_r);
+            printf("mmap_lock wait total: %lf\n", wait_w + wait_r);
+            printf("mmap_lock wait total / Real: %lf\n", (wait_w + wait_r) / ((double)real_time * 1000 * mr_state.mr_fixed.nr_cpus));
+        }
+        else {
+            printf("cores: %d, wasted time: %lf, total time: %lf\n",
+                   mr_state.mr_fixed.nr_cpus, wait_w + wait_r, (double)real_time * 1000);
+        }
 
         // FILE *fp = fopen("results.txt", "a");
         // fprintf(fp, "%d\t%lf\t%lf\t%lf\t%lf\t%lu\n",

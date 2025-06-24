@@ -487,6 +487,7 @@ main(int argc, char **argv)
     mr_param.nr_cpus = nprocs;
     mr_param.split_func = kmeans_splitter;
     mr_param.split_arg = &kmeans_data;
+    mr_param.quiet = quiet;
     while (modified == true) {
 	modified = false;
 	kmeans_data.next_point = 0;
@@ -506,7 +507,7 @@ main(int argc, char **argv)
 	if (kmeans_vals.length > 0)
 	    free(kmeans_vals.data);
     }
-    mr_print_stats();
+    mr_print_stats(quiet);
     if (!quiet)
 	dump_means(kmeans_data.means, num_means);
     free(inbuf);

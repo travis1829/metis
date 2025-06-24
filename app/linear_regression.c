@@ -220,6 +220,7 @@ main(int argc, char *argv[])
     mr_param.split_arg = &ps;	// Array to regress
     mr_param.part_func = linear_regression_partition;
     mr_param.key_cmp = intkeycmp;
+    mr_param.quiet = quiet;
 //#define PREFETCH
 #ifdef PREFETCH
     int sum = 0;
@@ -230,7 +231,7 @@ main(int argc, char *argv[])
 #endif
     mr_print(!quiet, "Linear regression: running...\n");
     assert(mr_run_scheduler(&mr_param) == 0);
-    mr_print_stats();
+    mr_print_stats(quiet);
 
     long long n;
     double a, b, xbar, ybar, r2;

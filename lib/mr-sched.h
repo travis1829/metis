@@ -15,10 +15,11 @@ typedef struct {
     partition_t part_func;	/* partition func. */
     keycopy_t keycopy;		/* invoked by Metis library for each new key exactly once */
     int nr_cpus;		/* # of cpus to use (use all cores by default) */
+    int quiet;
 } mr_param_t;
 
 /* public functions for use by applications. */
-extern void mr_print_stats(void);
+extern void mr_print_stats(int quiet);
 extern int mr_run_scheduler(mr_param_t * param);
 extern void mr_finalize(void);
 

@@ -308,8 +308,9 @@ main(int argc, char *argv[])
     mr_param.key_cmp = myshortcmp;
     mr_param.part_func = NULL;	// use default
     mr_param.nr_cpus = nprocs;
+    mr_param.quiet = quiet;
     assert(mr_run_scheduler(&mr_param) == 0);
-    mr_print_stats();
+    mr_print_stats(quiet);
 
     short pix_val;
     long freq;
