@@ -123,31 +123,27 @@ static inline uint64_t
 get_cpu_freq(void)
 {
 #ifdef JOS_USER
-    return 2400ULL * 1000 * 1000;
+    // Note: For sv6, we need to manually change this for each machine.
+    return 3737890000ULL;
 #else
-    FILE *fd;
+    const char *path = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq";
+    FILE *fp = fopen(path, "r");
+    if (!fp) {
+        fprintf(stderr, "failed to get cpu frequecy\n");
+	    perror(NULL);
+        return 0;
+    }
+
     uint64_t freq = 0;
-    float freqf = 0;
-    char *line = NULL;
-    size_t len = 0;
-
-    fd = fopen("/proc/cpuinfo", "r");
-    if (!fd) {
-	fprintf(stderr, "failed to get cpu frequecy\n");
-	perror(NULL);
-	return freq;
+    if (fscanf(fp, "%lu", &freq) != 1) {
+        fprintf(stderr, "Failed to read frequency from %s\n", path);
+        fclose(fp);
+        perror(NULL);
+        return 0;
     }
 
-    while (getline(&line, &len, fd) != EOF) {
-	if (sscanf(line, "cpu MHz\t: %f", &freqf) == 1) {
-	    freqf = freqf * 1000000UL;
-	    freq = (uint64_t) freqf;
-	    break;
-	}
-    }
-
-    fclose(fd);
-    return freq;
+    fclose(fp);
+    return freq * 1000;
 #endif
 }
 
