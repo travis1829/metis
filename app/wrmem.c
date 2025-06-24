@@ -247,15 +247,15 @@ main(int argc, char *argv[])
 	    quiet = 1;
 	    break;
 	case 'a':
-	    // xv6 malloc
-	    {
-		void malloc_set_alloc_unit(size_t bytes);
-		malloc_set_alloc_unit(atoi(optarg));
-	    }
-        if (!quiet) {
-	        printf("# --malloc=%s\n",
-		       pretty_size(atoi(optarg), buf, sizeof buf));
-        }
+	    // // xv6 malloc
+	    // {
+		// void malloc_set_alloc_unit(size_t bytes);
+		// malloc_set_alloc_unit(atoi(optarg));
+	    // }
+        // if (!quiet) {
+	    //     printf("# --malloc=%s\n",
+		//        pretty_size(atoi(optarg), buf, sizeof buf));
+        // }
 	    break;
 	default:
 	    wr_usage(argv[0]);
