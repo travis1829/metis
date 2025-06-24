@@ -1,13 +1,8 @@
 #pragma once
 
-#include <cstdint>
+#include <stdint.h>
 
 #include "amd64.h"
-#include "pstream.hh"
-
-#ifdef XV6_KERNEL
-#include "spercpu.hh"
-#endif
 
 // XXX(Austin) With decent per-CPU static variables, we could just use
 // a per-CPU variable for each of these stats, plus some static
@@ -35,6 +30,9 @@
                                                 \
   X(uint64_t, mmap_count)                       \
   X(uint64_t, mmap_cycles)                      \
+  /* Total number of cycles wasted during mmap() because we needed to  \
+   * restart the whole operation. */                                   \
+  X(uint64_t, mmap_retry_cycles)                \
                                                 \
   X(uint64_t, munmap_count)                     \
   X(uint64_t, munmap_cycles)                    \
@@ -94,73 +92,10 @@
   KSTATS_FILE(X)                                \
 
 struct kstats;
-#ifdef XV6_KERNEL
-DECLARE_PERCPU(struct kstats, mykstats, NO_CRITICAL);
-#endif
 
 struct kstats
 {
 #define X(type, name) type name;
   KSTATS_ALL(X)
 #undef X
-
-#ifdef XV6_KERNEL
-  template<class T>
-  static void inc(T kstats::* field, T delta = 1)
-  {
-    (*mykstats).*field += delta;
-  }
-
-  class timer
-  {
-    uint64_t kstats::* field;
-    uint64_t start;
-
-  public:
-    timer(uint64_t kstats::* field) : field(field), start(rdtsc()) { }
-
-    ~timer()
-    {
-      end();
-    }
-
-    void end()
-    {
-      if (field)
-        kstats::inc(field, rdtsc() - start);
-      field = nullptr;
-    }
-
-    void abort()
-    {
-      field = nullptr;
-    }
-  };
-#endif
-
-  kstats &operator+=(const kstats &o)
-  {
-#define X(type, name) name += o.name;
-    KSTATS_ALL(X);
-#undef X
-    return *this;
-  }
-
-  kstats operator-(const kstats &b) const
-  {
-    kstats res{};
-#define X(type, name) res.name = name - b.name;
-    KSTATS_ALL(X);
-#undef X
-    return res;
-  }
 };
-
-__attribute__((unused))
-static void
-to_stream(print_stream *s, const kstats &o)
-{
-#define X(type, name) s->println(o.name, " " #name);
-  KSTATS_ALL(X);
-#undef X
-}

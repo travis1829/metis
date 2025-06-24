@@ -138,11 +138,11 @@ sti(void)
   __asm volatile("sti");
 }
 
-static inline void
-nop_pause(void)
-{
-  __asm volatile("pause" : :);
-}
+// static inline void
+// nop_pause(void)
+// {
+//   __asm volatile("pause" : :);
+// }
 
 static inline void
 rep_nop(void)

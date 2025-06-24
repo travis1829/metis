@@ -12,7 +12,8 @@
 #include "presplitter.h"
 #include "apphelper.h"
 
-#if XV6_USER
+#ifdef XV6_USER
+#include "kstats.h"
 #include "sysstubs.h"           /* For xv6 pt_pages */
 #endif
 
@@ -48,7 +49,9 @@ static uint64_t total_map_time;
 static uint64_t total_reduce_time;
 static uint64_t total_merge_time;
 static uint64_t total_real_time;
-#ifndef XV6_USER
+#ifdef XV6_USER
+struct kstats kstats_before, kstats_after;
+#else
 static int lockstat_enabled;
 #endif
 extern TLS int cur_lcpu;	// defined in lib/pthreadpool.c
@@ -223,7 +226,34 @@ mr_run_task(task_type_t type)
     prof_phase_end(&st);
 }
 
-#ifndef XV6_USER
+#ifdef XV6_USER
+size_t
+read_repeat(int fd, void *buf, size_t n)
+{
+  size_t pos = 0;
+  while (pos < n) {
+    int r = read(fd, (char*)buf + pos, n - pos);
+    if (r < 0)
+      die("read failed");
+    if (r == 0)
+      break;
+    pos += r;
+  }
+  return pos;
+}
+
+static void
+read_kstats(struct kstats *out)
+{
+  int fd = open("/dev/kstats", O_RDONLY);
+  if (fd < 0)
+    die("Couldn't open /dev/kstats");
+  int r = read_repeat(fd, out, sizeof *out);
+  if (r != sizeof *out)
+    die("Short read from /dev/kstats");
+  close(fd);
+}
+#else /* XV6_USER */
 int start_lockstat()
 {
     FILE *fp;
@@ -298,7 +328,7 @@ double read_lockstat_r()
     }
     return -1;
 }
-#endif
+#endif /* XV6_USER */
 
 int
 mr_run_scheduler(mr_param_t * param)
@@ -306,7 +336,9 @@ mr_run_scheduler(mr_param_t * param)
     uint64_t real_start;
     uint64_t start_time, map_time = 0, reduce_time = 0, merge_time = 0;
 
-    #ifndef XV6_USER
+    #ifdef XV6_USER
+    read_kstats(&kstats_before);
+    #else
     lockstat_enabled = 1;
     if (start_lockstat()) {
         printf("Lock statistics off.\n");
@@ -351,7 +383,9 @@ mr_run_scheduler(mr_param_t * param)
     total_reduce_time += reduce_time;
     total_merge_time += merge_time;
     total_real_time += read_tsc() - real_start;
-    #ifndef XV6_USER
+    #ifdef XV6_USER
+    read_kstats(&kstats_after);
+    #else
     if (lockstat_enabled && stop_lockstat())
         printf("Error while stopping lock statistics.\n");
     #endif
@@ -392,11 +426,13 @@ mr_print_stats(int quiet)
         printf("\n");
     }
 #ifdef XV6_USER
+    uint64_t retry_cycles = kstats_after.mmap_retry_cycles - kstats_before.mmap_retry_cycles;
     if (!quiet) {
+        printf("mmap_retry_cycles: \t%lu\n", retry_cycles);
         printf("PT pages: %" PRIu64 "\n", pt_pages());
     }
     else {
-        printf("cores: %d, total real cycles: %lu\n", mr_state.mr_fixed.nr_cpus, total_real_time);
+        printf("cores: %d, wasted cycles: %lu, total real cycles: %lu\n", mr_state.mr_fixed.nr_cpus, retry_cycles, total_real_time);
     }
 #else
     if (lockstat_enabled) {
