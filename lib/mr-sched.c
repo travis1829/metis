@@ -48,6 +48,9 @@ static uint64_t total_map_time;
 static uint64_t total_reduce_time;
 static uint64_t total_merge_time;
 static uint64_t total_real_time;
+#ifndef XV6_USER
+static int lockstat_enabled;
+#endif
 extern TLS int cur_lcpu;	// defined in lib/pthreadpool.c
 
 static unsigned
@@ -220,11 +223,97 @@ mr_run_task(task_type_t type)
     prof_phase_end(&st);
 }
 
+#ifndef XV6_USER
+int start_lockstat()
+{
+    FILE *fp;
+    
+    // Clear previous content
+    fp = fopen("/proc/lock_stat", "w");
+    if (!fp)
+        return -1;
+    if (fprintf(fp, "0") < 0) {
+        fclose(fp);
+        return -1;
+    }
+    fclose(fp);
+
+    // Start lock_stat
+    fp = fopen("/proc/sys/kernel/lock_stat", "w");
+    if (!fp)
+        return -1;
+    if (fprintf(fp, "1") < 0) {
+        fclose(fp);
+        return -1;
+    }
+    fclose(fp);
+
+    return 0;
+}
+
+int stop_lockstat()
+{
+    FILE *fp = fopen("/proc/sys/kernel/lock_stat", "w");
+    if (!fp)
+        return -1;
+    if (fprintf(fp, "0") < 0) {
+        fclose(fp);
+        return -1;
+    }
+    fclose(fp);
+
+    return 0;
+}
+
+double read_lockstat_w()
+{
+    FILE *fp = fopen("/proc/lock_stat", "r");
+    double wait_time;
+    char *line = NULL, *substr = NULL;
+    size_t len = 0;
+    if (!fp)
+        return -1;
+    while (getline(&line, &len, fp) != EOF) {
+        substr = strstr(line, "&mm->mmap_lock-W:");
+        if (substr && sscanf(substr, "&mm->mmap_lock-W: %*f %*f %*f %*f %lf", &wait_time) > 0) {
+            return wait_time;
+        }
+    }
+    return -1;
+}
+
+double read_lockstat_r()
+{
+    FILE *fp = fopen("/proc/lock_stat", "r");
+    double wait_time;
+    char *line = NULL, *substr = NULL;
+    size_t len = 0;
+    if (!fp)
+        return -1;
+    while (getline(&line, &len, fp) != EOF) {
+        substr = strstr(line, "&mm->mmap_lock-R:");
+        if (substr && sscanf(substr, "&mm->mmap_lock-R: %*f %*f %*f %*f %lf", &wait_time) > 0) {
+            return wait_time;
+        }
+    }
+    return -1;
+}
+#endif
+
 int
 mr_run_scheduler(mr_param_t * param)
 {
-    uint64_t real_start = read_tsc();
+    uint64_t real_start;
     uint64_t start_time, map_time = 0, reduce_time = 0, merge_time = 0;
+
+    #ifndef XV6_USER
+    lockstat_enabled = 1;
+    if (start_lockstat()) {
+        printf("Lock statistics off.\n");
+        lockstat_enabled = 0;
+    }
+    #endif
+    real_start = read_tsc();
     memset(&mr_state, 0, sizeof(mr_state_t));
     mr_setup(param);
     // map phase
@@ -260,6 +349,10 @@ mr_run_scheduler(mr_param_t * param)
     total_reduce_time += reduce_time;
     total_merge_time += merge_time;
     total_real_time += read_tsc() - real_start;
+    #ifndef XV6_USER
+    if (lockstat_enabled && stop_lockstat())
+        printf("Error while stopping lock statistics.\n");
+    #endif
     return 0;
 }
 
@@ -267,20 +360,23 @@ void
 mr_print_stats(void)
 {
     prof_print(mr_state.mr_fixed.nr_cpus);
+    uint64_t cpu_freq = get_cpu_freq();
     uint64_t sum_time =
-	total_sample_time + total_map_time + total_reduce_time +
-	total_merge_time;
+	(total_sample_time + total_map_time + total_reduce_time +
+	total_merge_time) * 1000 / cpu_freq;
+    uint64_t real_time = total_real_time * 1000 / cpu_freq;
 #define SEP "\t"
     printf("Runtime in millisecond [%d cores]\n\t",
 	   mr_state.mr_fixed.nr_cpus);
     printf("Sample:\t%" PRIu64 SEP,
-	   total_sample_time * 1000 / get_cpu_freq());
-    printf("Map:\t%" PRIu64 SEP, total_map_time * 1000 / get_cpu_freq());
+	   total_sample_time * 1000 / cpu_freq);
+    printf("Map:\t%" PRIu64 SEP, total_map_time * 1000 / cpu_freq);
     printf("Reduce:\t%" PRIu64 SEP,
-	   total_reduce_time * 1000 / get_cpu_freq());
-    printf("Merge:\t%" PRIu64 SEP, total_merge_time * 1000 / get_cpu_freq());
-    printf("Sum:\t%" PRIu64 SEP, sum_time * 1000 / get_cpu_freq());
-    printf("Real:\t%" PRIu64 SEP, total_real_time * 1000 / get_cpu_freq());
+	   total_reduce_time * 1000 / cpu_freq);
+    printf("Merge:\t%" PRIu64 SEP, total_merge_time * 1000 / cpu_freq);
+    printf("Sum:\t%" PRIu64 SEP, sum_time);
+    printf("Real:\t%" PRIu64 SEP, real_time);
+    printf("\nReal in cycles: \t%lu\n", total_real_time);
     printf("\nNumber of Tasks\n\t");
     if (the_app.atype == atype_maponly) {
 	printf("Map:\t%" PRIu64 SEP, presplitter_nsplits(&mr_state.ps));
@@ -291,8 +387,21 @@ mr_print_stats(void)
 	printf("Reduce:\t%" PRIu32 SEP, the_app.mapgr.tasks);
     }
     printf("\n");
-#if XV6_USER
+#ifdef XV6_USER
     printf("PT pages: %" PRIu64 "\n", pt_pages());
+#else
+    if (lockstat_enabled) {
+        double wait_w = read_lockstat_w(), wait_r = read_lockstat_r();
+        printf("&mm->mmap_lock-W: %lf\n", wait_w);
+        printf("&mm->mmap_lock-R: %lf\n", wait_r);
+        printf("mmap_lock wait total: %lf\n", wait_w + wait_r);
+        printf("mmap_lock wait total / Real: %lf\n", (wait_w + wait_r) / ((double)real_time * 1000 * mr_state.mr_fixed.nr_cpus));
+
+        // FILE *fp = fopen("results.txt", "a");
+        // fprintf(fp, "%d\t%lf\t%lf\t%lf\t%lf\t%lu\n",
+        //         mr_state.mr_fixed.nr_cpus, wait_w, wait_r, (double)real_time * 1000, (wait_w + wait_r) / ((double)real_time * 1000 * mr_state.mr_fixed.nr_cpus), total_real_time);
+        // fclose(fp);
+    }
 #endif
 }
 
